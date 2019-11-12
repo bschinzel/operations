@@ -1,0 +1,129 @@
+USE MYSQL;
+CREATE USER 'jboss'@'%' IDENTIFIED BY 'fubar' REQUIRE X509;
+mysql> GRANT INSERT ON preiserfassung.* TO 'jboss'@'%';
+Query OK, 0 rows affected (0.07 sec)
+mysql> GRANT SELECT ON preiserfassung.* TO 'jboss'@'%';
+Query OK, 0 rows affected (0.07 sec)
+mysql> GRANT DELETE ON preiserfassung.* TO 'jboss'@'%';
+Query OK, 0 rows affected (0.09 sec)
+mysql> GRANT UPDATE ON preiserfassung.* TO 'jboss'@'%';
+Query OK, 0 rows affected (0.12 sec)
+SELECT ssl_type, user, host FROM user;
+
+# Create clean environment
+mkdir c:\newcerts
+cd c:\newcerts
+
+# Create CA certificate
+openssl genrsa 2048 > ca-key.pem
+openssl req -new -x509 -nodes -days 3600 \
+        -key ca-key.pem -out ca.pem
+
+# Create server certificate, remove passphrase, and sign it
+# server-cert.pem = public key, server-key.pem = private key
+openssl req -newkey rsa:2048 -days 3600 \
+        -nodes -keyout server-key.pem -out server-req.pem
+openssl rsa -in server-key.pem -out server-key.pem
+openssl x509 -req -in server-req.pem -days 3600 \
+        -CA ca.pem -CAkey ca-key.pem -set_serial 01 -out server-cert.pem
+
+# Create client certificate, remove passphrase, and sign it
+# client-cert.pem = public key, client-key.pem = private key
+openssl req -newkey rsa:2048 -days 3600 \
+        -nodes -keyout client-key.pem -out client-req.pem
+openssl rsa -in client-key.pem -out client-key.pem
+openssl x509 -req -in client-req.pem -days 3600 \
+        -CA ca.pem -CAkey ca-key.pem -set_serial 01 -out client-cert.pem
+
+		
+D:\app2\server\mysql\mysql-8.0.12-winx64\bin>mysql -ujboss -p --ssl-ca="..\data\ca.pem" --ssl-cert="..\data\client-cert.pem" --ssl-key="..\data\client-key.pem"
+Enter password: *****
+mysql> SHOW SESSION STATUS LIKE 'Ssl_version';
++---------------+---------+
+| Variable_name | Value   |
++---------------+---------+
+| Ssl_version   | TLSv1.2 |
++---------------+---------+
+1 row in set (0.00 sec)
+mysql> SHOW SESSION STATUS LIKE 'Ssl_cipher';
++---------------+---------------------------+
+| Variable_name | Value                     |
++---------------+---------------------------+
+| Ssl_cipher    | DHE-RSA-AES128-GCM-SHA256 |
++---------------+---------------------------+
+1 row in set (0.00 sec)
+
+MySQL  localhost:33060+ ssl  mysql  Py > shell.connect({'user':'jboss', 'host':'localhost', 'port':3306, 'ssl-cert':'C:\ProgramData\MySQL\MySQL Server 8.0\Data\client-cert.pem', 'ssl-ca':'C:\ProgramData\MySQL\MySQL Server 8.0\Data\ca.pem', 'ssl-key':'C:\ProgramData\MySQL\MySQL Server 8.0\Data\client-key.pem'})
+Creating a session to 'jboss@localhost:3306?ssl-ca=C%3A%5CProgramData%5CMySQL%5CMySQL%20Server%208.0%5CData%5Cca.pem&ssl-cert=C%3A%5CProgramData%5CMySQL%5CMySQL%20Server%208.0%5CData%5Cclient-cert.pem&ssl-key=C%3A%5CProgramData%5CMySQL%5CMySQL%20Server%208.0%5CData%5Cclient-key.pem'
+Please provide the password for 'jboss@localhost:3306': *****
+Save password for 'jboss@localhost:3306'? [Y]es/[N]o/Ne[v]er (default No): n
+Fetching schema names for autocompletion... Press ^C to stop.
+Closing old connection...
+Your MySQL connection id is 16
+Server version: 8.0.18 MySQL Community Server - GPL
+No default schema selected; type \use <schema> to set one.
+<ClassicSession:jboss@localhost:3306>
+ MySQL  localhost:3306 ssl  Py >
+
+ D:\app2\server\mysql\mysql-8.0.12-winx64\data>keytool -import -alias MySQLServer -file server-cert.pem -keystore truststore.jks -storepass fubarbaz
+Eigentümer: CN=MySQL_Server_8.0.12_Auto_Generated_Server_Certificate
+Aussteller: CN=MySQL_Server_8.0.12_Auto_Generated_CA_Certificate
+Seriennummer: 2
+Gültig von: Mon Oct 15 09:00:56 CEST 2018 bis: Thu Oct 12 09:00:56 CEST 2028
+Zertifikat-Fingerprints:
+         MD5:  59:92:3A:37:B9:30:CB:BF:AF:69:C0:E4:1A:CB:8A:C4
+         SHA1: 77:6E:E6:56:E3:E9:6C:03:92:2C:10:4D:F8:80:80:86:BE:B8:83:A1
+         SHA256: 50:9C:57:1C:18:72:FE:28:07:DA:AF:32:BD:E5:D1:B5:46:A5:4A:7C:98:63:9C:A7:B0:00:7A:CA:40:B2:D1:E6
+         Signaturalgorithmusname: SHA256withRSA
+         Version: 3
+
+Erweiterungen:
+
+#1: ObjectId: 2.5.29.19 Criticality=true
+BasicConstraints:[
+  CA:false
+  PathLen: undefined
+]
+
+Diesem Zertifikat vertrauen? [Nein]:  ja
+Zertifikat wurde Keystore hinzugefügt
+D:\app2\server\mysql\mysql-8.0.12-winx64\data>openssl pkcs12 -export -in client-cert.pem -inkey client-key.pem -out client.p12 -name MySQLClient
+Enter Export Password:
+Verifying - Enter Export Password:
+
+D:\app2\server\mysql\mysql-8.0.12-winx64\data>keytool -importkeystore -deststorepass fubarbaz -destkeystore keystore.jks -srckeystore client.p12 -srcstorepass fubarbaz -alias MySQLClient
+c:\newcerts>dir
+ca-key.pem       client-key.pem  keystore.jks     server-req.pem
+ca.pem           client-req.pem  server-cert.pem  truststore.jks
+client-cert.pem  client.p12      server-key.pem
+
+D:\app2\server\mysql\mysql-8.0.12-winx64\data>mv truststore.jks D:\app2\server\jboss\jboss-eap-7.1\standalone\configuration
+D:\app2\server\mysql\mysql-8.0.12-winx64\data>mv keystore.jks D:\app2\server\jboss\jboss-eap-7.1\standalone\configuration
+
+D:\app2\server\jboss\jboss-eap-7.1\bin>jboss-cli.bat
+You are disconnected at the moment. Type 'connect' to connect to the server or 'help' for the list of supported commands.
+[disconnected /] connect
+[standalone@localhost:9990 /] deploy C:\Users\bschinzel\Downloads\mysql-connector-java-8.0.12\mysql-connector-java-8.0.12\mysql-connector-java-8.0.12.jar
+[standalone@localhost:9990 /] /deployment=*:read-attribute(name=name)
+{
+    "outcome" => "success",
+    "result" => [{
+        "address" => [("deployment" => "mysql-connector-java-8.0.12.jar")],
+        "outcome" => "success",
+        "result" => "mysql-connector-java-8.0.12.jar"
+    }]
+}
+[standalone@localhost:9990 /] data-source add --name=appDS --jndi-name=java:/appDS --driver-name=mysql-connector-java-8.0.12.jar --connection-url= jdbc:mysql://localhost:3306/preiserfassung?serverTimezone=Europe/Berlin&amp;useSSL=true&amp;requireSSL=true&amp;verifyServerCertificate=false&amp;trustCertificateKeyStoreUrl=file:///D:/app2/server/jboss/jboss-eap-7.1/standalone/configuration/truststore.jks&amp;trustCertificateKeyStorePassword=fubarbaz&amp;clientCertificateKeyStoreUrl=file:///D:/app2/server/jboss/jboss-eap-7.1/standalone/configuration/keystore.jks&amp;clientCertificateKeyStorePassword=fubarbaz --background-validation=true --driver-class=com.mysql.cj.jdbc.Driver --enabled=true --exception-sorter-class-name=org.jboss.jca.adapters.jdbc.extensions.mysql.MySQLExceptionSorter --user-name=jboss --password=fubar --valid-connection-checker-class-name=org.jboss.jca.adapters.jdbc.extensions.mysql.MySQLValidConnectionChecker
+[standalone@localhost:9990 /] /subsystem=logging/logger=de.hsl:add
+{"outcome" => "success"}
+[standalone@localhost:9990 /] /subsystem=logging/logger=de.hsl:write-attribute(name=level,value=TRACE)
+{"outcome" => "success"}
+/subsystem=elytron/jdbc-realm=appRealm:add(principal-query=[{sql="SELECT u.passwort FROM user AS u WHERE u.benutzerkennung = ?", data-source=appDS, simple-digest-mapper={algorithm=simple-digest-sha-256,password-index=1}},{sql="SELECT r.name FROM user AS u, userrole AS r WHERE u.benutzerkennung = ? AND u.uuid = r.uuiduser", data-source=appDS, attribute-mapping=[{index=1, to="roles"}]}])
+/subsystem=elytron/simple-role-decoder="from-roles-attribute":add(attribute="roles")
+/subsystem=elytron/security-domain=appSD:add(realms=[{realm=appRealm,role-decoder=from-roles-attribute}],default-realm=appRealm,permission-mapper=default-permission-mapper)
+/subsystem=elytron/http-authentication-factory=app-db-http-auth:add(http-server-mechanism-factory=global,security-domain=appSD,mechanism-configurations=[{mechanism-name=FORM,mechanism-realm-configurations=[{realm-name=appRealm}]}])
+/subsystem=ejb3/application-security-domain=appApplicationDomain:add(security-domain=appSD)
+/subsystem=undertow/application-security-domain=appApplicationDomain:add(http-authentication-factory=app-db-http-auth)
+/subsystem=elytron/sasl-authentication-factory=app-sasl-auth:add(sasl-server-factory=configured, security-domain=appSD, mechanism-configurations=[{mechanism-name=PLAIN}])
+/subsystem=remoting/http-connector=http-remoting-connector:write-attribute(name=sasl-authentication-factory,value=app-sasl-auth)
+
